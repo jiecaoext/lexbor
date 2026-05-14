@@ -1,0 +1,137 @@
+name: Android NDK Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      ndk_version:
+        description: 'Android NDK version'
+        required: false
+        default: '27.2.12479018'
+      android_api:
+        description: 'Android minimum API level'
+        required: false
+        default: '21'
+
+env:
+  BUILD_TYPE: Release
+  NDK_VERSION: ${{ github.event.inputs.ndk_version || '27.2.12479018' }}
+  ANDROID_API: ${{ github.event.inputs.android_api || '21' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64, x86]
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Android NDK
+      uses: nttld/setup-ndk@v1
+      id: setup-ndk
+      with:
+        ndk-version: ${{ env.NDK_VERSION }}
+        local-cache: true
+
+    - name: Configure CMake
+      env:
+        ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+      run: |
+        cmake -B build \
+          -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+          -DANDROID_ABI=${{ matrix.abi }} \
+          -DANDROID_PLATFORM=android-${{ env.ANDROID_API }} \
+          -DANDROID_STL=c++_static \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DLEXBOR_BUILD_SHARED=ON \
+          -DLEXBOR_BUILD_STATIC=ON \
+          -DLEXBOR_BUILD_TESTS=OFF \
+          -DLEXBOR_BUILD_EXAMPLES=OFF \
+          -DLEXBOR_BUILD_UTILS=OFF \
+          -DLEXBOR_BUILD_BENCHMARKS=OFF
+
+    - name: Build
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} -j$(nproc)
+
+    - name: Prepare artifacts
+      run: |
+        mkdir -p artifacts/${{ matrix.abi }}/lib
+        mkdir -p artifacts/${{ matrix.abi }}/include
+
+        # Copy shared libraries - follow symlinks, copy real files only
+        find build -name "*.so" -type f -exec cp {} artifacts/${{ matrix.abi }}/lib/ \;
+        find build -name "*.so.*" -type f -exec cp {} artifacts/${{ matrix.abi }}/lib/ \;
+
+        # Copy static libraries
+        find build -name "*.a" -type f -exec cp {} artifacts/${{ matrix.abi }}/lib/ \;
+
+        # Strip shared libraries to reduce size
+        STRIP=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
+        find artifacts/${{ matrix.abi }}/lib -name "*.so*" -type f -exec $STRIP {} \; 2>/dev/null || true
+
+        # Copy headers
+        cp -r source/lexbor artifacts/${{ matrix.abi }}/include/
+
+        # Show what we got
+        echo "=== Libraries ==="
+        ls -la artifacts/${{ matrix.abi }}/lib/
+        echo "=== Headers ==="
+        find artifacts/${{ matrix.abi }}/include -name "*.h" | wc -l
+      env:
+        ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: lexbor-android-${{ matrix.abi }}
+        path: artifacts/${{ matrix.abi }}/
+
+  package:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: lexbor-android-*
+        path: all-artifacts/
+        merge-multiple: false
+
+    - name: Create combined package
+      run: |
+        mkdir -p lexbor-android
+
+        # Copy headers (same for all ABIs)
+        cp -r all-artifacts/lexbor-android-arm64-v8a/include lexbor-android/
+
+        # Copy libs for each ABI
+        for abi_dir in all-artifacts/lexbor-android-*/; do
+          abi=$(basename "$abi_dir" | sed 's/lexbor-android-//')
+          mkdir -p "lexbor-android/lib/$abi"
+          cp -a "$abi_dir/lib/"* "lexbor-android/lib/$abi/" 2>/dev/null || true
+        done
+
+        # List contents
+        echo "=== Package structure ==="
+        find lexbor-android -type f | sort
+
+    - name: Upload combined package
+      uses: actions/upload-artifact@v4
+      with:
+        name: lexbor-android-all
+        path: lexbor-android/
+
+    - name: Create release archive
+      if: startsWith(github.ref, 'refs/tags/')
+      run: tar -czf lexbor-android.tar.gz lexbor-android/
+
+    - name: Upload to release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: lexbor-android.tar.gz
