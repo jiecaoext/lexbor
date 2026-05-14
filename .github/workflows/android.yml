@@ -31,16 +31,15 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Android NDK
-      uses: nttld/setup-ndk@v1
-      id: setup-ndk
-      with:
-        ndk-version: ${{ env.NDK_VERSION }}
-        local-cache: true
+    - name: Install Android NDK
+      run: |
+        yes | sdkmanager --install "ndk;${{ env.NDK_VERSION }}" || true
+        NDK_PATH=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}
+        echo "ANDROID_NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+        echo "NDK installed at: $NDK_PATH"
+        ls "$NDK_PATH/build/cmake/android.toolchain.cmake"
 
     - name: Configure CMake
-      env:
-        ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       run: |
         cmake -B build \
           -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
@@ -82,8 +81,6 @@ jobs:
         ls -la artifacts/${{ matrix.abi }}/lib/
         echo "=== Headers ==="
         find artifacts/${{ matrix.abi }}/include -name "*.h" | wc -l
-      env:
-        ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
