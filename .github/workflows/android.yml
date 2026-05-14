@@ -9,7 +9,7 @@ on:
       ndk_version:
         description: 'Android NDK version'
         required: false
-        default: '27.2.12479018'
+        default: '26.1.10909125'
       android_api:
         description: 'Android minimum API level'
         required: false
@@ -17,7 +17,7 @@ on:
 
 env:
   BUILD_TYPE: Release
-  NDK_VERSION: ${{ github.event.inputs.ndk_version || '27.2.12479018' }}
+  NDK_VERSION: ${{ github.event.inputs.ndk_version || '26.1.10909125' }}
   ANDROID_API: ${{ github.event.inputs.android_api || '21' }}
 
 jobs:
