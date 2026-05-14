@@ -77,8 +77,12 @@ jobs:
         STRIP=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
         find artifacts/${{ matrix.abi }}/lib -name "*.so*" -type f -exec $STRIP {} \; 2>/dev/null || true
 
-        # Copy headers
-        cp -r source/lexbor artifacts/${{ matrix.abi }}/include/
+        # Copy headers only (.h files)
+        cd source && find lexbor -name "*.h" -exec bash -c '
+          dest="../artifacts/${{ matrix.abi }}/include/$1"
+          mkdir -p "$(dirname "$dest")"
+          cp "$1" "$dest"
+        ' _ {} \; && cd ..
 
         # Show what we got
         echo "=== Libraries ==="
