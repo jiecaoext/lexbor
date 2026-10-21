@@ -154,6 +154,11 @@ LXB_API lxb_dom_comment_t *
 lxb_html_tree_insert_comment(lxb_html_tree_t *tree,
                              lxb_html_token_t *token, lxb_dom_node_t *pos);
 
+LXB_API lxb_dom_processing_instruction_t *
+lxb_html_tree_insert_processing_instruction(lxb_html_tree_t *tree,
+                                            lxb_html_token_t *token,
+                                            lxb_dom_node_t *pos);
+
 LXB_API lxb_dom_document_type_t *
 lxb_html_tree_create_document_type_from_token(lxb_html_tree_t *tree,
                                               lxb_html_token_t *token);
@@ -204,6 +209,9 @@ lxb_html_tree_element_in_scope_option_optgroup(lxb_html_tree_t *tree);
 
 LXB_API bool
 lxb_html_tree_check_scope_element(lxb_html_tree_t *tree);
+
+LXB_API bool
+lxb_html_tree_parsing_template_contents(lxb_html_tree_t *tree);
 
 LXB_API lxb_status_t
 lxb_html_tree_close_p_element(lxb_html_tree_t *tree, lxb_html_token_t *token);

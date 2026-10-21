@@ -17,6 +17,26 @@ typedef struct {
 }
 lxb_test_entry_t;
 
+typedef struct {
+    lxb_dom_document_cmode_t mode;
+    const char *sel;
+    size_t expected;
+}
+test_case_count_t;
+
+typedef struct {
+    const char *sel;
+    size_t expected;
+}
+test_case_selector_count_t;
+
+typedef struct {
+    const char *html;
+    const char *sel;
+    size_t expected;
+}
+test_case_html_selector_count_t;
+
 static const lxb_char_t html[] =
     "<div div='First' class='Strong Massive'>"
     "    <p p=1><a a=1>a1</a></p>"
@@ -109,7 +129,7 @@ static const lxb_test_entry_t selectors_list[] =
      "<p p=\"6\" lang=\"en-GB\">"},
 
     {"[lang |= 'eN']",
-     ""},
+     "<p p=\"6\" lang=\"en-GB\">"},
 
     {"[lang |= 'eN' i]",
      "<p p=\"6\" lang=\"en-GB\">"},
@@ -895,6 +915,365 @@ TEST_BEGIN(match_first)
 }
 TEST_END
 
+TEST_BEGIN(match_id_class_case)
+{
+    size_t count;
+    lxb_status_t status;
+    lxb_dom_node_t *node;
+    lxb_selectors_t *selectors;
+    lxb_css_parser_t *parser;
+    lxb_css_memory_t *memory;
+    lxb_css_selector_list_t *list;
+    lxb_html_document_t *document;
+    lxb_dom_document_t *dom_document;
+
+    static const test_case_count_t cases[] = {
+        {LXB_DOM_DOCUMENT_CMODE_NO_QUIRKS, ".test", 0},
+        {LXB_DOM_DOCUMENT_CMODE_NO_QUIRKS, "#foo", 0},
+        {LXB_DOM_DOCUMENT_CMODE_NO_QUIRKS, ".Test", 1},
+        {LXB_DOM_DOCUMENT_CMODE_NO_QUIRKS, "#Foo", 1},
+        {LXB_DOM_DOCUMENT_CMODE_QUIRKS, ".test", 1},
+        {LXB_DOM_DOCUMENT_CMODE_QUIRKS, "#foo", 1}
+    };
+
+    static const lxb_char_t html[] =
+        "<!DOCTYPE html><div class='Test'><span id='Foo'></span></div>";
+
+    size_t cases_length = sizeof(cases) / sizeof(test_case_count_t);
+
+    document = lxb_html_document_create();
+    status = lxb_html_document_parse(document, html, sizeof(html) - 1);
+    test_eq(status, LXB_STATUS_OK);
+
+    memory = lxb_css_memory_create();
+    status = lxb_css_memory_init(memory, 128);
+    test_eq(status, LXB_STATUS_OK);
+
+    parser = lxb_css_parser_create();
+    status = lxb_css_parser_init(parser, NULL);
+    test_eq(status, LXB_STATUS_OK);
+
+    lxb_css_parser_memory_set(parser, memory);
+
+    selectors = lxb_selectors_create();
+    status = lxb_selectors_init(selectors);
+    test_eq(status, LXB_STATUS_OK);
+
+    node = lxb_dom_interface_node(lxb_html_document_body_element(document));
+    dom_document = lxb_dom_interface_document(document);
+
+    for (size_t i = 0; i < cases_length; i++) {
+        dom_document->compat_mode = cases[i].mode;
+
+        list = lxb_css_selectors_parse(parser, (const lxb_char_t *) cases[i].sel,
+                                       strlen(cases[i].sel));
+        test_ne(list, NULL);
+
+        count = 0;
+        status = lxb_selectors_find(selectors, node, list,
+                                    find_callback_count, &count);
+        test_eq(status, LXB_STATUS_OK);
+        test_eq(count, cases[i].expected);
+
+        lxb_css_parser_erase(parser);
+    }
+
+    (void) lxb_css_memory_destroy(memory, true);
+    (void) lxb_html_document_destroy(document);
+    (void) lxb_css_parser_destroy(parser, true);
+    (void) lxb_selectors_destroy(selectors, true);
+}
+TEST_END
+
+TEST_BEGIN(match_non_ascii_ident_class)
+{
+    size_t count;
+    lxb_status_t status;
+    lxb_dom_node_t *node;
+    lxb_selectors_t *selectors;
+    lxb_css_parser_t *parser;
+    lxb_css_memory_t *memory;
+    lxb_css_selector_list_t *list;
+    lxb_html_document_t *document;
+
+    static const lxb_char_t html[] =
+        "<!DOCTYPE html>"
+        "<i class='\xC3\x9C" "ber'></i>"
+        "<i class='a\xC2\xB7" "b'></i>"
+        "<i class='\xCD\xBD" "x'></i>";
+
+    static const test_case_selector_count_t cases[] = {
+        {".\xC3\x9C" "ber", 1},
+        {".a\xC2\xB7" "b", 1},
+        {".\xCD\xBD" "x", 1}
+    };
+
+    size_t cases_length = sizeof(cases) / sizeof(test_case_selector_count_t);
+
+    document = lxb_html_document_create();
+    status = lxb_html_document_parse(document, html, sizeof(html) - 1);
+    test_eq(status, LXB_STATUS_OK);
+
+    memory = lxb_css_memory_create();
+    status = lxb_css_memory_init(memory, 128);
+    test_eq(status, LXB_STATUS_OK);
+
+    parser = lxb_css_parser_create();
+    status = lxb_css_parser_init(parser, NULL);
+    test_eq(status, LXB_STATUS_OK);
+
+    lxb_css_parser_memory_set(parser, memory);
+
+    selectors = lxb_selectors_create();
+    status = lxb_selectors_init(selectors);
+    test_eq(status, LXB_STATUS_OK);
+
+    node = lxb_dom_interface_node(lxb_html_document_body_element(document));
+
+    for (size_t i = 0; i < cases_length; i++) {
+        list = lxb_css_selectors_parse(parser, (const lxb_char_t *) cases[i].sel,
+                                       strlen(cases[i].sel));
+        test_ne(list, NULL);
+
+        count = 0;
+        status = lxb_selectors_find(selectors, node, list,
+                                    find_callback_count, &count);
+        test_eq(status, LXB_STATUS_OK);
+        test_eq(count, cases[i].expected);
+
+        lxb_css_parser_erase(parser);
+    }
+
+    (void) lxb_css_memory_destroy(memory, true);
+    (void) lxb_html_document_destroy(document);
+    (void) lxb_css_parser_destroy(parser, true);
+    (void) lxb_selectors_destroy(selectors, true);
+}
+TEST_END
+
+TEST_BEGIN(match_attribute_include_empty)
+{
+    size_t count;
+    lxb_status_t status;
+    lxb_dom_node_t *node;
+    lxb_selectors_t *selectors;
+    lxb_css_parser_t *parser;
+    lxb_css_memory_t *memory;
+    lxb_css_selector_list_t *list;
+    lxb_html_document_t *document;
+
+    static const test_case_html_selector_count_t cases[] = {
+        {"<!DOCTYPE html><i x=' '></i>", "[x~='']", 0},
+        {"<!DOCTYPE html><i x='&#9;'></i>", "[x~='']", 0},
+        {"<!DOCTYPE html><i x=' a'></i>", "[x~='']", 0},
+        {"<!DOCTYPE html><i x='a  b'></i>", "[x~='']", 0},
+        {"<!DOCTYPE html><i x='a  '></i>", "[x~='']", 0},
+        {"<!DOCTYPE html><i x='a '></i>", "[x~='']", 0},
+        {"<!DOCTYPE html><i x=''></i>", "[x~='']", 0},
+        {"<!DOCTYPE html><i x='a b'></i>", "[x~='']", 0},
+        {"<!DOCTYPE html><i x='a b'></i>", "[x~='a b']", 0},
+        {"<!DOCTYPE html><i x='a\tb'></i>", "[x~='a\tb']", 0},
+        {"<!DOCTYPE html><i x='a b'></i>", "[x~=a]", 1},
+        {"<!DOCTYPE html><i x='a b'></i>", "[x~=b]", 1},
+        {"<!DOCTYPE html><i x='a\tb'></i>", "[x~=b]", 1},
+        {"<!DOCTYPE html><i x='a\nb'></i>", "[x~=b]", 1},
+        {"<!DOCTYPE html><i x='a\fb'></i>", "[x~=b]", 1},
+        {"<!DOCTYPE html><i x='a\rb'></i>", "[x~=b]", 1}
+    };
+
+    size_t cases_length = sizeof(cases)
+                          / sizeof(test_case_html_selector_count_t);
+
+    memory = lxb_css_memory_create();
+    status = lxb_css_memory_init(memory, 128);
+    test_eq(status, LXB_STATUS_OK);
+
+    parser = lxb_css_parser_create();
+    status = lxb_css_parser_init(parser, NULL);
+    test_eq(status, LXB_STATUS_OK);
+
+    lxb_css_parser_memory_set(parser, memory);
+
+    selectors = lxb_selectors_create();
+    status = lxb_selectors_init(selectors);
+    test_eq(status, LXB_STATUS_OK);
+
+    for (size_t i = 0; i < cases_length; i++) {
+        document = lxb_html_document_create();
+        status = lxb_html_document_parse(document,
+                                (const lxb_char_t *) cases[i].html,
+                                strlen(cases[i].html));
+        test_eq(status, LXB_STATUS_OK);
+
+        node = lxb_dom_interface_node(lxb_html_document_body_element(document));
+
+        list = lxb_css_selectors_parse(parser,
+                                       (const lxb_char_t *) cases[i].sel,
+                                       strlen(cases[i].sel));
+        test_ne(list, NULL);
+
+        count = 0;
+        status = lxb_selectors_find(selectors, node, list,
+                                    find_callback_count, &count);
+        test_eq(status, LXB_STATUS_OK);
+        test_eq(count, cases[i].expected);
+
+        lxb_css_parser_erase(parser);
+        lxb_html_document_destroy(document);
+    }
+
+    (void) lxb_css_memory_destroy(memory, true);
+    (void) lxb_css_parser_destroy(parser, true);
+    (void) lxb_selectors_destroy(selectors, true);
+}
+TEST_END
+
+TEST_BEGIN(match_eof_attribute_selector)
+{
+    size_t count;
+    lxb_status_t status;
+    lxb_dom_node_t *node;
+    lxb_selectors_t *selectors;
+    lxb_css_parser_t *parser;
+    lxb_css_memory_t *memory;
+    lxb_css_selector_list_t *list;
+    lxb_html_document_t *document;
+
+    static const test_case_html_selector_count_t cases[] = {
+        {"<!DOCTYPE html><div att='val'></div>", "[att", 1},
+        {"<!DOCTYPE html><div att='val'></div>", "[att=val", 1},
+        {"<!DOCTYPE html><div att='a b'></div>", "[att=\"a b", 1},
+        {"<!DOCTYPE html><div att='VAL'></div>", "[att=val i", 1},
+        {"<!DOCTYPE html><div att='val'></div><span att='val'></span>",
+         "div[att", 1},
+        {"<!DOCTYPE html><span class='cls'></span><span></span>",
+         "span:not([class", 1}
+    };
+
+    size_t cases_length = sizeof(cases)
+                          / sizeof(test_case_html_selector_count_t);
+
+    memory = lxb_css_memory_create();
+    status = lxb_css_memory_init(memory, 128);
+    test_eq(status, LXB_STATUS_OK);
+
+    parser = lxb_css_parser_create();
+    status = lxb_css_parser_init(parser, NULL);
+    test_eq(status, LXB_STATUS_OK);
+
+    lxb_css_parser_memory_set(parser, memory);
+
+    selectors = lxb_selectors_create();
+    status = lxb_selectors_init(selectors);
+    test_eq(status, LXB_STATUS_OK);
+
+    for (size_t i = 0; i < cases_length; i++) {
+        document = lxb_html_document_create();
+        status = lxb_html_document_parse(document,
+                                (const lxb_char_t *) cases[i].html,
+                                strlen(cases[i].html));
+        test_eq(status, LXB_STATUS_OK);
+
+        node = lxb_dom_interface_node(lxb_html_document_body_element(document));
+
+        list = lxb_css_selectors_parse(parser,
+                                       (const lxb_char_t *) cases[i].sel,
+                                       strlen(cases[i].sel));
+        test_ne(list, NULL);
+
+        count = 0;
+        status = lxb_selectors_find(selectors, node, list,
+                                    find_callback_count, &count);
+        test_eq(status, LXB_STATUS_OK);
+        test_eq(count, cases[i].expected);
+
+        lxb_css_parser_erase(parser);
+        lxb_html_document_destroy(document);
+    }
+
+    (void) lxb_css_memory_destroy(memory, true);
+    (void) lxb_css_parser_destroy(parser, true);
+    (void) lxb_selectors_destroy(selectors, true);
+}
+TEST_END
+
+TEST_BEGIN(match_html_case_insensitive_attributes)
+{
+    size_t count;
+    lxb_status_t status;
+    lxb_dom_node_t *node;
+    lxb_selectors_t *selectors;
+    lxb_css_parser_t *parser;
+    lxb_css_memory_t *memory;
+    lxb_css_selector_list_t *list;
+    lxb_html_document_t *document;
+
+    static const lxb_char_t html[] =
+        "<!DOCTYPE html>"
+        "<a rel='NOFOLLOW' data-html='yes' data-x='ABC'></a>"
+        "<a rel='nofollow' data-html='yes'></a>"
+        "<input type='text'>"
+        "<form accept-charset='utf-8'></form>"
+        "<svg><a rel='NOFOLLOW' data-svg='yes'></a></svg>";
+
+    static const test_case_selector_count_t cases[] = {
+        {"[rel=nofollow][data-html=yes]", 2},
+        {"[rel=NOFOLLOW][data-html=yes]", 2},
+        {"[rel=nofollow i]", 3},
+        {"[rel=nofollow s]", 1},
+        {"[data-x=abc]", 0},
+        {"[data-x=ABC]", 1},
+        {"[type=TEXT]", 1},
+        {"[type=TEXT s]", 0},
+        {"[accept-charset=UTF-8]", 1},
+        {"[accept-charset=UTF-8 s]", 0},
+        {"[rel=nofollow][data-svg=yes]", 0},
+        {"[rel=NOFOLLOW][data-svg=yes]", 1}
+    };
+
+    size_t cases_length = sizeof(cases) / sizeof(test_case_selector_count_t);
+
+    document = lxb_html_document_create();
+    status = lxb_html_document_parse(document, html, sizeof(html) - 1);
+    test_eq(status, LXB_STATUS_OK);
+
+    memory = lxb_css_memory_create();
+    status = lxb_css_memory_init(memory, 128);
+    test_eq(status, LXB_STATUS_OK);
+
+    parser = lxb_css_parser_create();
+    status = lxb_css_parser_init(parser, NULL);
+    test_eq(status, LXB_STATUS_OK);
+
+    lxb_css_parser_memory_set(parser, memory);
+
+    selectors = lxb_selectors_create();
+    status = lxb_selectors_init(selectors);
+    test_eq(status, LXB_STATUS_OK);
+
+    node = lxb_dom_interface_node(lxb_html_document_body_element(document));
+
+    for (size_t i = 0; i < cases_length; i++) {
+        list = lxb_css_selectors_parse(parser, (const lxb_char_t *) cases[i].sel,
+                                       strlen(cases[i].sel));
+        test_ne(list, NULL);
+
+        count = 0;
+        status = lxb_selectors_find(selectors, node, list,
+                                    find_callback_count, &count);
+        test_eq(status, LXB_STATUS_OK);
+        test_eq(count, cases[i].expected);
+
+        lxb_css_parser_erase(parser);
+    }
+
+    (void) lxb_css_memory_destroy(memory, true);
+    (void) lxb_html_document_destroy(document);
+    (void) lxb_css_parser_destroy(parser, true);
+    (void) lxb_selectors_destroy(selectors, true);
+}
+TEST_END
+
 int
 main(int argc, const char * argv[])
 {
@@ -905,6 +1284,11 @@ main(int argc, const char * argv[])
     TEST_ADD(match_root);
     TEST_ADD(match_root_document);
     TEST_ADD(match_first);
+    TEST_ADD(match_id_class_case);
+    TEST_ADD(match_non_ascii_ident_class);
+    TEST_ADD(match_attribute_include_empty);
+    TEST_ADD(match_eof_attribute_selector);
+    TEST_ADD(match_html_case_insensitive_attributes);
 
     TEST_RUN("lexbor/selectors/selectors");
     TEST_RELEASE();

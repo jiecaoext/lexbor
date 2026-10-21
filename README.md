@@ -39,6 +39,7 @@ https://lexbor.com/modules/.
 - **[SerpApi](https://serpapi.com/)** — uses Lexbor in production for HTML parsing at scale
 - **[Selectolax](https://github.com/rushter/selectolax)** — popular Python library for fast web scraping
 - **[Nokolexbor](https://github.com/serpapi/nokolexbor)** — high-performance Nokogiri alternative for Ruby
+- **[Nordstjernen](https://github.com/nordstjernen-web/nordstjernen)** - Web browser written entirely in C
 
 [More bindings](#external-bindings-and-wrappers) available for Elixir, Crystal, D, Julia, Erlang.
 
@@ -220,7 +221,6 @@ The `liblexbor-html` library already contains all the pointers to the required d
 * [Erlang](https://hex.pm/packages/lexbor_erl) Fast HTML5 Parser with CSS selectors and DOM manipulation (since 2.6.0 version)
 * [Crystal](https://github.com/kostya/lexbor) Fast HTML5 Parser with CSS selectors for Crystal language
 * [Python](https://github.com/rushter/selectolax#available-backends) binding for modest and lexbor engines.
-* [D](https://github.com/trikko/parserino) Fast HTML5 Parser with CSS selectors for D programming language
 * [Ring](https://github.com/ysdragon/ring-html) Fast HTML5 Parser with CSS selectors and DOM manipulation for the Ring programming language.
 * [Ruby](https://github.com/serpapi/nokolexbor) Fast HTML5 Parser with both CSS selectors and XPath support.
 * [PHP](https://github.com/php/php-src)'s DOM extension uses Lexbor's HTML living standard parser and CSS selector support, starting from PHP 8.4.
